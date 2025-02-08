@@ -1,9 +1,10 @@
-KantaiBERT_copy/
+KantaiBERT_backup/
 KantaiBERT_uniprot/
 KantaiBERT/
 data/
 old/
 predict/
+KantaiBERT-Copy1.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
