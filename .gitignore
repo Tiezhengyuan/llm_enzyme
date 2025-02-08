@@ -1,3 +1,10 @@
+KantaiBERT_copy/
+KantaiBERT_uniprot/
+KantaiBERT/
+data/
+old/
+predict/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
