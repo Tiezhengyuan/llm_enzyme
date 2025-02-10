@@ -20,21 +20,21 @@ class ProcessData:
             json_file = os.path.join(self.curr_dir, 'data', name)
             if os.path.isfile(json_file):
                 with open(json_file, 'r') as f:
-                    meta = json.load(f)
-                    break
+                    meta += json.load(f)
         else:
             print(f"{len(meta)}")
 
         # get temperature and faa
-        res = []
+        res = {}
         for item in meta:
             # print(item)
             if 'incubation_temperature' in item:
                 temperature = [str(i) for i in item['incubation_temperature']]
                 for name in os.listdir(item.get('local_path')):
                     if name.endswith('.faa.gz'):
+                        key = item['#Organism/Name']
                         faa_file = os.path.join(item.get('local_path'), name)
-                        res.append((item['#Organism/Name'], temperature, faa_file))
+                        res[key] = (key, temperature, faa_file)
         return res
 
     def prepare_aa(self, aa_meta):
@@ -43,7 +43,7 @@ class ProcessData:
         outdir = os.path.join(self.curr_dir, 'data', 'temperature')
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
-        for specie, temperature, faa_file in aa_meta:
+        for specie, temperature, faa_file in aa_meta.values():
             temperature_str = '-'.join(temperature)
             m += 1
             outdir2 = os.path.join(outdir, str(temperature))
@@ -71,7 +71,7 @@ class ProcessData:
             os.mkdir(outdir)
         outfile = os.path.join(outdir, f"temperature_mask.txt")
         with open(outfile, 'w') as f:
-            for specie, temperature, faa_file in aa_meta:
+            for specie, temperature, faa_file in aa_meta.values():
                 temperature = np.max([int(t) for t in temperature])
                 m += 1
                 for seq_id, seq_desc, seq in self.read_faa(faa_file):
@@ -110,7 +110,7 @@ class ProcessData:
         json_file = 'data/genome_report.json'
         with open(json_file, 'w') as f:
             json.dump(self.meta, f, indent=True)
-        return self.meta
+        return json_file
 
     def genome_report(self, infile:str, nrows:int=None) -> list:
         '''
