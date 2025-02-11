@@ -2,12 +2,6 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "../machine_learning"
-		},
-		{
-			"path": "../ml_biomarker"
 		}
 	]
 }
