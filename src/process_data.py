@@ -9,15 +9,63 @@ import json
 import subprocess
 import gzip
 
+
+from utils import Utils
+
 class ProcessData:
-    def __init__(self,):
+    def __init__(self, data_dir):
+        self.curr_dir = data_dir
         self.meta = []
-        self.curr_dir = os.path.dirname(__file__)
 
     def get_meta(self):
+        return self.meta
+    
+    def genome_report_atcc(self, infile:str, nrows:int=None) -> list:
+        '''
+        get genome report from the file downloaded from NCBI
+        update self.meta
+        '''
+        df = pd.read_csv(infile, sep='\t', na_values='', low_memory=False, nrows=nrows)
+        # filter
+        atcc_df = df[df.Strain.astype(str).str.contains("ATCC")]
+        atcc_no = [re.findall(r'ATCC.(\d+)', i) for i in list(atcc_df.Strain)]
+        atcc_df = atcc_df.assign(ATCC_No= [i[0] if i else '' for i in atcc_no])
+        # convert to dict
+        self.meta = atcc_df.to_dict(orient='records')
+        print(f"Number of genome: {len(self.meta)}")
+
+    def retrieve_atcc(self, atcc_dir:str):
+        '''
+        scan HTML downloaded from ATCC, update incubation temperature
+        update self.meta
+        '''
+        m=n = 0
+        for item in self.meta:
+            strain = item.get('Strain', '')
+            atcc_strain = re.findall(r'ATCC.(\d+)', strain)
+            if atcc_strain and 'incubation_temperature' not in item:
+                atcc_no = atcc_strain[0]
+                try:
+                    # download data from ATCC
+                    xmlstring = self.get_atcc_data(atcc_dir, atcc_no)
+                    # retrieve temperature
+                    res = self.get_temperature(xmlstring)
+                    item.update(res)
+                    n += 1
+                except Exception as e:
+                    m += 1
+                    # print(f"Failure: {atcc_no}, error={e}")
+        print(f"parse strains={n}, failed in download={m}")
+
+
+    def collect_meta(self):
+        '''
+        combine all meta data
+        remove duplicates
+        '''
         meta = []
-        for name in ['genome_report_2.json', 'genome_report.json']:
-            json_file = os.path.join(self.curr_dir, 'data', name)
+        for name in ['genome_report_atcc.json', 'genome_report_2.json']:
+            json_file = os.path.join(self.curr_dir, name)
             if os.path.isfile(json_file):
                 with open(json_file, 'r') as f:
                     meta += json.load(f)
@@ -38,11 +86,11 @@ class ProcessData:
         return res
 
     def prepare_aa(self, aa_meta):
+        '''
+        '''
         m, n = 0, 0
         # create directories
-        outdir = os.path.join(self.curr_dir, 'data', 'temperature')
-        if not os.path.isdir(outdir):
-            os.mkdir(outdir)
+        outdir = os.path.join(self.curr_dir, 'temperature')
         for specie, temperature, faa_file in aa_meta.values():
             temperature_str = '-'.join(temperature)
             m += 1
@@ -66,7 +114,7 @@ class ProcessData:
     def prepare_aa_mask(self, aa_meta):
         m, n = 0, 0
         # create directories
-        outdir = os.path.join(self.curr_dir, 'data', 'temperature_mask')
+        outdir = os.path.join(self.curr_dir, 'temperature_mask')
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
         outfile = os.path.join(outdir, f"temperature_mask.txt")
@@ -88,46 +136,12 @@ class ProcessData:
                     yield rec.id, rec.description, str(rec.seq)
 
 
-    def retrieve_atcc(self, num_rec:int=None):
-        n = 0
-        for item in self.meta:
-            n += 1
-            strain = item.get('Strain', '')
-            atcc_strain = re.findall(r'ATCC.(\d+)', strain)
-            if atcc_strain and 'incubation_temperature' not in item:
-                atcc_no = atcc_strain[0]
-                try:
-                    # download data from ATCC
-                    xmlstring = self.get_atcc_data(atcc_no)
-                    # retrieve temperature
-                    res = self.get_temperature(xmlstring)
-                    item.update(res)
-                except Exception as e:
-                    print(f"Failure: {atcc_no}, error={e}")
-            if num_rec and n >= num_rec:
-                break
-
-        json_file = 'data/genome_report.json'
-        with open(json_file, 'w') as f:
-            json.dump(self.meta, f, indent=True)
-        return json_file
-
-    def genome_report(self, infile:str, nrows:int=None) -> list:
-        '''
-        get genome report from the file downloaded from NCBI
-        '''
-        df = pd.read_csv(infile, sep='\t', na_values='', low_memory=False, nrows=nrows)
-        # filter
-        atcc_df = df[df.Strain.astype(str).str.contains("ATCC")]
-        atcc_no = [re.findall(r'ATCC.(\d+)', i) for i in list(atcc_df.Strain)]
-        atcc_df = atcc_df.assign(ATCC_No= [i[0] if i else '' for i in atcc_no])
-        # convert to dict
-        self.meta = atcc_df.to_dict(orient='records')
-        print(f"Number of genome: {len(self.meta)}")
-        return self.meta
     
-    def get_atcc_data(self, atcc_no):
-        html_file = f'data/atcc/{atcc_no}.html'
+    def get_atcc_data(self, indir:str, atcc_no):
+        '''
+        read HTMl. Download it if that doesn't exist.
+        '''
+        html_file = os.path.join(indir, f'{atcc_no}.html')
         if os.path.isfile(html_file):
             with open(html_file, 'r') as f:
                 return f.read()
